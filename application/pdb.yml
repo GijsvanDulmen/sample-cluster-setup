@@ -1,0 +1,13 @@
+# Why would you need this?
+# Is used during node draining and make sure your application
+# stays running
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: echoserver-pdb
+  namespace: application01
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: echoserver
