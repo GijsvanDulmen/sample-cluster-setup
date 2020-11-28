@@ -1,0 +1,102 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: echoserver
+  namespace: application01
+spec:
+  type: NodePort
+  selector:
+    app: echoserver
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: networking.k8s.io/v1beta1
+kind: Ingress
+metadata:
+  name: ingress-echoserver
+  namespace: application01
+  annotations:
+    kubernetes.io/ingress.class: "nginx"
+    cert-manager.io/cluster-issuer: letsencrypt-production
+spec:
+  rules:
+  - host: echoserver.test02.ziny.nl
+    http:
+      paths:
+      - path: /
+        backend:
+          serviceName: echoserver
+          servicePort: 8080
+  tls:
+  - hosts:
+    - echoserver.test02.ziny.nl
+    secretName: echoserver-test02-ziny-nl
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: echoserver
+  namespace: application01
+  labels:
+    app: echoserver
+spec:
+  replicas: 1
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  selector:
+    matchLabels:
+      app: echoserver
+  template:
+    metadata:
+      labels:
+        app: echoserver
+    spec:
+      containers:
+      - name: echoserver
+        image: gijsvandulmen/echoserver:latest
+        imagePullPolicy: Always
+        resources:
+          requests:
+            cpu: "50m"
+            memory: "100Mi"
+          limits:
+            cpu: "500m"
+            memory: "1000Mi"
+        ports:
+          - containerPort: 8080
+        livenessProbe:
+          httpGet:
+            path: /live
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 600
+          timeoutSeconds: 5
+          failureThreshold: 5
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8080
+          initialDelaySeconds: 10
+          periodSeconds: 5
+          timeoutSeconds: 5
+          failureThreshold: 2
+        # env:
+      terminationGracePeriodSeconds: 5
+---
+# Why would you need this?
+# Is used during node draining and make sure your application
+# stays running
+apiVersion: policy/v1beta1
+kind: PodDisruptionBudget
+metadata:
+  name: echoserver-pdb
+  namespace: application01
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: echoserver
