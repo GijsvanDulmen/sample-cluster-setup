@@ -8,7 +8,7 @@ metadata:
     cert-manager.io/cluster-issuer: letsencrypt-production
 spec:
   rules:
-  - host: echoserver.test02.ziny.nl
+  - host: app.cluster.gijsvandulmen.dev
     http:
       paths:
       - path: /
@@ -17,5 +17,5 @@ spec:
           servicePort: 8080
   tls:
   - hosts:
-    - echoserver.test02.ziny.nl
-    secretName: echoserver-test02-ziny-nl
+    - app.cluster.gijsvandulmen.dev
+    secretName: app-cluster-gijsvandulmen-dev
