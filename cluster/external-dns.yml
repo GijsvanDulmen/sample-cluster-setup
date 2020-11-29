@@ -68,5 +68,5 @@ spec:
         - --provider=google
         - --google-project=cluster-test-02
         - --registry=txt
-        - --txt-owner-id=my-identifier
+        - --txt-owner-id=external-dns-gijsvandulmen-dev
         # - --dry-run
