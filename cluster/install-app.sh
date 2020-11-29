@@ -4,7 +4,7 @@ kubectl apply -f ./app-infra
 
 echo "Use the following to login to ArgoCD: "
 echo "Domain:"
-echo " https://argocd.test02.ziny.nl/"
+echo " https://argocd.cluster.gijsvandulmen.dev/"
 echo "User:"
 echo " admin"
 echo "Password: "

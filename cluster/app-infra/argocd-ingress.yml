@@ -11,7 +11,7 @@ metadata:
     nginx.ingress.kubernetes.io/backend-protocol: "HTTPS"
 spec:
   rules:
-  - host: argocd.test02.ziny.nl
+  - host: argocd.cluster.gijsvandulmen.dev
     http:
       paths:
       - backend:
@@ -20,5 +20,5 @@ spec:
         path: /
   tls:
   - hosts:
-    - argocd.test02.ziny.nl
+    - argocd.cluster.gijsvandulmen.dev
     secretName: argocd-domain-certificate-secret

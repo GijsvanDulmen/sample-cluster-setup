@@ -1,6 +1,7 @@
 #!/bin/bash
 PROJECT_ID=cluster-test-02
 ACCOUNT=gijsvandulmen@gmail.com
+REGION="europe-west4" # Eemshaven, Netherlands, Europe
 
 # config
 gcloud config set account ${ACCOUNT}
@@ -20,7 +21,6 @@ gcloud iam service-accounts keys create key.json --iam-account terraform@${PROJE
 export GOOGLE_APPLICATION_CREDENTIALS="$PWD/key.json"
 
 # setup terraform gcs bucket for state share
-REGION="europe-west4" # Eemshaven, Netherlands, Europe
 BUCKET_NAME="${PROJECT_ID}-terraform-cluster-state"
 gsutil mb -l ${REGION} gs://${BUCKET_NAME}
 gsutil iam ch serviceAccount:terraform@${PROJECT_ID}.iam.gserviceaccount.com:objectAdmin gs://${BUCKET_NAME}
@@ -35,7 +35,7 @@ terraform apply \
     -var="identity_namespace=${PROJECT_ID}.svc.id.goog"
 
 # set correct credentials
-gcloud container clusters get-credentials ${PROJECT_ID}
+gcloud container clusters get-credentials ${PROJECT_ID} --region ${REGION}
 
 # set cluster admin role to current user
 kubectl create clusterrolebinding cluster-admin-binding \
@@ -43,6 +43,7 @@ kubectl create clusterrolebinding cluster-admin-binding \
     --user $(gcloud config get-value account)
 
 # set extra firewall rule for admission webhooks
+gcloud compute firewall-rules delete allow-admission-webhooks-node1 --quiet
 gcloud compute firewall-rules create allow-admission-webhooks-node1 \
     --action ALLOW \
     --direction INGRESS \
@@ -86,10 +87,28 @@ kubectl apply -f https://raw.githubusercontent.com/kubernetes/ingress-nginx/cont
 
 # Wait till it's ready
 kubectl wait --namespace ingress-nginx \
-  --for=condition=ready pod \
-  --selector=app.kubernetes.io/component=controller \
+  --for=condition=available deployment/ingress-nginx-controller \
   --timeout=120s
 
-# install domain
-echo "Configure the following for the test02.ziny.nl domain: "
-kubectl get service -n ingress-nginx ingress-nginx-controller -o json | jq -r '.status.loadBalancer.ingress[0].ip'
+# install kubernetes ExternalDNS with Google Cloud DNS enabled
+CLOUD_DNS_SA=cloud-dns-admin
+gcloud --project ${PROJECT_ID} iam service-accounts \
+    create ${CLOUD_DNS_SA} \
+    --display-name "Service Account for ExternalDNS."
+
+gcloud projects add-iam-policy-binding ${PROJECT_ID} \
+    --member serviceAccount:${CLOUD_DNS_SA}@${PROJECT_ID}.iam.gserviceaccount.com \
+    --role roles/dns.admin
+
+gcloud iam service-accounts keys create ./external-dns-key.json \
+    --iam-account=${CLOUD_DNS_SA}@${PROJECT_ID}.iam.gserviceaccount.com
+
+# create ns
+kubectl create ns externaldns
+
+kubectl create secret -n externaldns generic cloud-dns-key \
+    --from-file=key.json=./external-dns-key.json
+
+rm ./external-dns-key.json # delete the key again
+
+kubectl apply -n externaldns -f ./external-dns.yml
