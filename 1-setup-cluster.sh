@@ -1,38 +1,30 @@
 #!/bin/bash
-PROJECT_ID=cluster-test-02
-ACCOUNT=gijsvandulmen@gmail.com
-REGION="europe-west4" # Eemshaven, Netherlands, Europe
+source 0-config.sh
 
 # config
 gcloud config set account ${ACCOUNT}
 gcloud config set project ${PROJECT_ID}
 
-# enable services
+# enable needed services
 gcloud services enable storage-api.googleapis.com
 gcloud services enable cloudresourcemanager.googleapis.com
 gcloud services enable compute.googleapis.com
 gcloud services enable container.googleapis.com
 gcloud services enable iam.googleapis.com
 
-# setup service account
-gcloud iam service-accounts create terraform
-gcloud projects add-iam-policy-binding ${PROJECT_ID} --member "serviceAccount:terraform@${PROJECT_ID}.iam.gserviceaccount.com" --role "roles/owner"
-gcloud iam service-accounts keys create key.json --iam-account terraform@${PROJECT_ID}.iam.gserviceaccount.com
-export GOOGLE_APPLICATION_CREDENTIALS="$PWD/key.json"
+# setup cluster with terraform
+cd gke-cluster-01
 
-# setup terraform gcs bucket for state share
-BUCKET_NAME="${PROJECT_ID}-terraform-cluster-state"
-gsutil mb -l ${REGION} gs://${BUCKET_NAME}
-gsutil iam ch serviceAccount:terraform@${PROJECT_ID}.iam.gserviceaccount.com:objectAdmin gs://${BUCKET_NAME}
-
-terraform init -backend-config=bucket=${BUCKET_NAME}
+terraform init
 
 terraform validate
 
 terraform apply \
-    -var="gcp_project_id=${PROJECT_ID}" \
+    -var="project_id=${PROJECT_ID}" \
     -var="cluster_name=${PROJECT_ID}" \
-    -var="identity_namespace=${PROJECT_ID}.svc.id.goog"
+    -var="region=${REGION}" \
+    -var='network="gke-network"' \
+    -var='subnetwork="gke-subnetwork"'
 
 # set correct credentials
 gcloud container clusters get-credentials ${PROJECT_ID} --region ${REGION}
@@ -41,27 +33,6 @@ gcloud container clusters get-credentials ${PROJECT_ID} --region ${REGION}
 kubectl create clusterrolebinding cluster-admin-binding \
     --clusterrole cluster-admin \
     --user $(gcloud config get-value account)
-
-# set extra firewall rule for admission webhooks
-gcloud compute firewall-rules delete allow-admission-webhooks-node1 --quiet
-gcloud compute firewall-rules create allow-admission-webhooks-node1 \
-    --action ALLOW \
-    --direction INGRESS \
-    --source-ranges 172.16.0.0/28 \
-    --network vpc-network \
-    --rules tcp:8443 \
-    --target-tags `gcloud compute firewall-rules list --filter "name~^gke-${PROJECT_ID}" --limit=1 --format=json | jq -r '.[0].targetTags[0]'`
-
-# list
-gcloud compute firewall-rules list \
-    --format 'table(
-        name,
-        network,
-        direction,
-        sourceRanges.list():label=SRC_RANGES,
-        allowed[].map().firewall_rule().list():label=ALLOW,
-        targetTags.list():label=TARGET_TAGS
-    )'
 
 # install cert-manager
 kubectl apply -f https://github.com/jetstack/cert-manager/releases/download/v1.1.0/cert-manager.yaml
@@ -111,4 +82,4 @@ kubectl create secret -n externaldns generic cloud-dns-key \
 
 rm ./external-dns-key.json # delete the key again
 
-kubectl apply -n externaldns -f ./external-dns.yml
+kubectl apply -n externaldns -f ../cluster-infra/external-dns.yml
