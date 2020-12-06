@@ -23,8 +23,8 @@ terraform apply \
     -var="project_id=${PROJECT_ID}" \
     -var="cluster_name=${PROJECT_ID}" \
     -var="region=${REGION}" \
-    -var='network="gke-network"' \
-    -var='subnetwork="gke-subnetwork"'
+    -var='network=gke-network' \
+    -var='subnetwork=gke-subnetwork'
 
 # set correct credentials
 gcloud container clusters get-credentials ${PROJECT_ID} --region ${REGION}
